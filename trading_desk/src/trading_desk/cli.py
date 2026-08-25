@@ -71,6 +71,11 @@ def main(argv: list[str] | None = None) -> int:
     bnc_order.add_argument("quantity", type=float)
     bnc_order.add_argument("--live", action="store_true", help="Submit for real; requires DESK_ALLOW_LIVE_ORDERS=1")
 
+    risk_cmd = sub.add_parser("risk", help="Shared risk state: open positions, daily PnL halt")
+    risk_sub = risk_cmd.add_subparsers(dest="risk_cmd", required=True)
+    risk_sub.add_parser("status", help="Show open positions and today's realized PnL vs the daily halt")
+    risk_sub.add_parser("reset-daily", help="Clear today's realized PnL (does not touch open positions)")
+
     kelly_cmd = sub.add_parser("kelly", help="Compute Kelly / half-Kelly / capped size")
     kelly_cmd.add_argument("--win-rate", type=float, default=0.55, help="True-ish win probability 0-1")
     kelly_cmd.add_argument("--rr", type=float, default=2.0, help="Average win / average loss")
@@ -92,7 +97,31 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_binance(args)
     if args.command == "kelly":
         return _cmd_kelly(args)
+    if args.command == "risk":
+        return _cmd_risk(args)
     return _cmd_analyze(args)
+
+
+def _cmd_risk(args: argparse.Namespace) -> int:
+    from trading_desk.risk import MAX_DAILY_LOSS_PCT, MAX_POSITION_PCT, daily_loss_breached, open_positions, reset_daily
+
+    if args.risk_cmd == "reset-daily":
+        reset_daily()
+        print("Daily realized PnL reset to 0.0%. Open positions untouched.")
+        return 0
+
+    breached, pnl_pct = daily_loss_breached()
+    print(f"Daily loss halt: {'BREACHED — new orders blocked' if breached else 'clear'} "
+          f"({pnl_pct:.2f}% vs -{MAX_DAILY_LOSS_PCT}% limit)")
+    print(f"Max position size: {MAX_POSITION_PCT}% of capital per order")
+    positions = open_positions()
+    if not positions:
+        print("Open positions: none")
+    else:
+        print("Open positions:")
+        for key, info in positions.items():
+            print(f"  {key:20} {info.get('side'):5} opened {info.get('opened_at')}")
+    return 0
 
 
 def _cmd_analyze(args: argparse.Namespace) -> int:

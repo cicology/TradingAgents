@@ -56,7 +56,16 @@ def klines(symbol: str, interval: str = "1d", limit: int = 30) -> dict[str, Any]
 
 
 def paper_order(symbol: str, side: str, quantity: float, live: bool = False) -> dict[str, Any]:
+    from trading_desk.risk import check_order, record_open
+
+    gate = check_order("binance", symbol, side)
+    if not gate.approved:
+        return {"status": "blocked", "reason": gate.reason, "venue": "binance", "symbol": symbol, "side": side.upper()}
+
     extra = [symbol, side.upper(), str(quantity)]
     if live:
         extra.append("--live")
-    return invoke("order", extra)
+    result = invoke("order", extra)
+    if result.get("status") in {"paper-logged", "submitted"}:
+        record_open("binance", symbol, side)
+    return result

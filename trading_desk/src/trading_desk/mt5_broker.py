@@ -230,6 +230,13 @@ def place_order(
             "mt5_symbol": symbol,
         }
 
+    from trading_desk.risk import check_order, record_open
+
+    gate = check_order("mt5", symbol, action, size_pct=size_pct)
+    if not gate.approved:
+        return {"status": "blocked", "reason": gate.reason, "mt5_symbol": symbol, "action": action}
+    size_pct = gate.size_pct if gate.size_pct is not None else size_pct
+
     mt5 = connect()
     try:
         if not mt5.symbol_select(symbol, True):
@@ -296,6 +303,7 @@ def place_order(
             "check": _as_dict(check),
         }
         if not live:
+            record_open("mt5", symbol, action)
             return paper
         if not live_orders_allowed():
             paper["status"] = "blocked"
@@ -304,9 +312,12 @@ def place_order(
         if not account.trade_allowed or not account.trade_expert:
             raise RuntimeError("MT5 account has AutoTrading disabled. Enable Algo Trading in the terminal.")
         result = mt5.order_send(request)
+        filled = bool(result and result.retcode == mt5.TRADE_RETCODE_DONE)
+        if filled:
+            record_open("mt5", symbol, action)
         payload = {
             **paper,
-            "status": "submitted" if result and result.retcode == mt5.TRADE_RETCODE_DONE else "rejected",
+            "status": "submitted" if filled else "rejected",
             "live": True,
             "result": _as_dict(result),
         }
