@@ -54,7 +54,7 @@ def _as_dict(obj: Any) -> dict[str, Any]:
         out = {}
         for key, value in data.items():
             if hasattr(value, "_asdict"):
-                out[key] = _asdict(value)
+                out[key] = _as_dict(value)
             else:
                 out[key] = value
         return out
