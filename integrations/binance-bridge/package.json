@@ -1,0 +1,13 @@
+{
+  "name": "oryares-binance-bridge",
+  "private": true,
+  "type": "module",
+  "description": "CLI wrapper around Kos-M/binance for Oryares Desk",
+  "scripts": {
+    "build": "npm --prefix ../binance install && npm --prefix ../binance run build",
+    "setup": "npm --prefix ../binance install && npm --prefix ../binance run build && npm install"
+  },
+  "dependencies": {
+    "binance": "file:../binance"
+  }
+}

@@ -1,0 +1,9 @@
+[submodule "integrations/brue"]
+	path = integrations/brue
+	url = https://github.com/cicology/brue.git
+[submodule "integrations/binance"]
+	path = integrations/binance
+	url = https://github.com/Kos-M/binance.git
+[submodule "polybot"]
+	path = polybot
+	url = https://github.com/cicology/polybot.git
