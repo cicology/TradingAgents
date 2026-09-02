@@ -1,6 +1,8 @@
 # Oryares Desk — Product, Architecture, and Roadmap
 
-Last updated: 2026-08-25
+Last updated: 2026-09-02
+
+> This document describes the current v0.1 prototype. The approved target architecture and delivery sequence are documented in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md), [ROADMAP.md](ROADMAP.md), and [TRACKER.md](TRACKER.md). Live-capital execution is outside the approved roadmap and must remain disabled.
 
 ## 1. Aim
 
