@@ -27,6 +27,13 @@ SITE_NAME = os.getenv("DESK_SITE_NAME", "Oryares Desk").strip() or "Oryares Desk
 KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.5") or 0.5)
 KELLY_CAP = float(os.getenv("KELLY_CAP", "0.05") or 0.05)
 
+# Deterministic stop-risk sizing (trading_desk.sizing, TA-104): the base
+# percent of equity risked per trade, independent of LLM confidence. This
+# is a config value, never something an LLM proposal supplies — see
+# Architectural Rule 2: LLM output must never directly determine
+# executable size.
+RISK_PCT_PER_TRADE = float(os.getenv("RISK_PCT_PER_TRADE", "1.0") or 1.0)
+
 MODEL_FALLBACKS = [
     DEFAULT_MODEL,
     "openrouter/free",
