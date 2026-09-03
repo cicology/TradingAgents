@@ -10,7 +10,7 @@ This folder contains three layers. They do not share a live execution path unles
 | **Integrations** | [`integrations/`](integrations/) | [Brue](https://github.com/cicology/brue) language + [Kos-M/binance](https://github.com/Kos-M/binance) SDK | Binance USDM/TradFi perps |
 | **Polybot** | [`polybot/`](polybot/) | Java HFT stack for Polymarket | BTC/ETH Up/Down binaries |
 
-**Start here:** [Project direction](docs/PROJECT_DIRECTION.md) · [Roadmap](docs/ROADMAP.md) · [Tracker](docs/TRACKER.md) · [Current desk runbook](docs/TRADING_DESK.md)
+**Start here:** [Project direction](docs/PROJECT_DIRECTION.md) · [Roadmap](docs/ROADMAP.md) · [Tracker](docs/TRACKER.md) · [Current desk runbook](docs/TRADING_DESK.md) · [Phase 0 operator/verification runbook](docs/RUNBOOK.md)
 
 > **Current status:** the Python desk is an analysis prototype. Live-capital execution is outside the approved roadmap and must remain disabled while the paper ledger, deterministic risk engine, outcome measurement, and promotion gates are built.
 

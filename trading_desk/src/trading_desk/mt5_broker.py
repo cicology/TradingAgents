@@ -324,8 +324,16 @@ def place_order(
             "type_filling": _filling_mode(mt5, info),
         }
         check = mt5.order_check(request)
+        # order_check() validates the request without placing it. Accepting
+        # the request (retcode DONE) is not the same as the request being
+        # invalid, and MetaTrader5's own docs warn that a successful check
+        # is not proof of execution either way — but a *failed* check means
+        # this request cannot be placed at all, so treating it as an open
+        # paper position would track a position that could never exist.
+        done_retcode = getattr(mt5, "TRADE_RETCODE_DONE", 10009)
+        check_ok = bool(check) and getattr(check, "retcode", None) == done_retcode
         paper = {
-            "status": "paper",
+            "status": "paper" if check_ok else "rejected",
             "live": False,
             "mt5_symbol": symbol,
             "side": action,
@@ -338,6 +346,9 @@ def place_order(
             "day_pnl": day_pnl,
             "check": _as_dict(check),
         }
+        if not check_ok:
+            paper["reason"] = f"order_check rejected the request: {getattr(check, 'comment', 'unknown reason')}"
+            return paper
         if not live:
             record_open("mt5", symbol, action, size_pct=size_pct)
             return paper

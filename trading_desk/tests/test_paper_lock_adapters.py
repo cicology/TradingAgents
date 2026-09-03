@@ -47,6 +47,7 @@ def test_mt5_place_order_paper_path_still_works(monkeypatch: pytest.MonkeyPatch,
         ORDER_FILLING_IOC = 1
         ORDER_FILLING_FOK = 2
         ORDER_FILLING_RETURN = 0
+        TRADE_RETCODE_DONE = 10009
 
         def symbol_select(self, *_args, **_kwargs) -> bool:
             return True
@@ -64,7 +65,7 @@ def test_mt5_place_order_paper_path_still_works(monkeypatch: pytest.MonkeyPatch,
             return []
 
         def order_check(self, *_args, **_kwargs):
-            return SimpleNamespace()
+            return SimpleNamespace(retcode=self.TRADE_RETCODE_DONE)
 
     monkeypatch.setattr(mt5_broker, "connect", lambda: FakeMT5())
     monkeypatch.setattr(mt5_broker, "shutdown", lambda: None)

@@ -4,6 +4,26 @@ Last updated: 2026-09-02
 
 > This document describes the current v0.1 prototype. The approved target architecture and delivery sequence are documented in [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md), [ROADMAP.md](ROADMAP.md), and [TRACKER.md](TRACKER.md). Live-capital execution is outside the approved roadmap and must remain disabled.
 
+## 0. Phase 0 safety state
+
+The desk is paper-only. `trading_desk.operating_mode.require_paper_mode()` is
+the single authoritative gate: Python (both the MT5 and Binance adapters)
+and the direct Node bridge reject every live request before any broker or
+network submission. `DESK_ALLOW_LIVE_ORDERS` is ignored during Phase 0 —
+no environment variable, CLI flag, or direct bridge invocation can enable
+it.
+
+Run the offline gate with:
+
+```powershell
+$env:PYTHONPATH = "trading_desk/src"
+python -m compileall -q trading_desk/src
+python -m pytest trading_desk/tests -q
+```
+
+Full operator setup, environment variables, incident response, recovery,
+and rollback procedures are in [docs/RUNBOOK.md](RUNBOOK.md).
+
 ## 1. Aim
 
 Build a project we can use to **analyse and eventually trade gold, equity indices, and crypto**, with **AI models doing the research**, not the order routing.
@@ -221,7 +241,7 @@ python -m trading_desk mt5 quote gold
 python -m trading_desk analyze gold --mt5 --dry-run
 ```
 
-Live deals need **all** of: Algo Trading on in MT5, `DESK_ALLOW_LIVE_ORDERS=1`, and `--mt5-live`. Paper is `order_check` only. Daily loss stop: `MT5_MAX_DAILY_LOSS_PCT=3`. Broker symbol names differ — set `MT5_SYMBOL_GOLD=XAUUSD` (or `GOLD`, `XAUUSDm`) to match Market Watch.
+Live deals are unreachable in this Phase 0 build regardless of Algo Trading, `DESK_ALLOW_LIVE_ORDERS`, or `--mt5-live` — see [§0 Phase 0 safety state](#0-phase-0-safety-state) below. Paper is `order_check` only. Daily loss stop: `MT5_MAX_DAILY_LOSS_PCT=3`. Broker symbol names differ — set `MT5_SYMBOL_GOLD=XAUUSD` (or `GOLD`, `XAUUSDm`) to match Market Watch.
 
 This does not make money by itself. It routes half-Kelly-capped size to your account. Demo first.
 
