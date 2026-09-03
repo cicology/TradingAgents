@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from trading_desk.config import REPORTS_DIR
-from trading_desk.domain import Action, LifecycleEvent, LifecycleEventType, TradeDecision, Verdict
+from trading_desk.domain import Action, LifecycleEvent, LifecycleEventType, Outcome, TradeDecision, Verdict
 
 DEFAULT_DB_PATH = REPORTS_DIR / "ledger.sqlite3"
 
@@ -112,6 +112,36 @@ _MIGRATIONS: list[tuple[int, str]] = [
         BEFORE DELETE ON decisions
         BEGIN
             SELECT RAISE(ABORT, 'decisions is append-only: DELETE is not permitted');
+        END;
+        """,
+    ),
+    (
+        3,
+        """
+        CREATE TABLE IF NOT EXISTS outcomes (
+            outcome_id        TEXT PRIMARY KEY,
+            venue             TEXT NOT NULL,
+            symbol            TEXT NOT NULL,
+            strategy_version  TEXT NOT NULL,
+            opened_at         TEXT NOT NULL,
+            closed_at         TEXT NOT NULL,
+            realized_pnl_pct  REAL NOT NULL,
+            recorded_at       TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_outcomes_strategy_closed
+            ON outcomes(strategy_version, closed_at);
+
+        CREATE TRIGGER IF NOT EXISTS trg_outcomes_no_update
+        BEFORE UPDATE ON outcomes
+        BEGIN
+            SELECT RAISE(ABORT, 'outcomes is append-only: UPDATE is not permitted');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_outcomes_no_delete
+        BEFORE DELETE ON outcomes
+        BEGIN
+            SELECT RAISE(ABORT, 'outcomes is append-only: DELETE is not permitted');
         END;
         """,
     ),
@@ -308,3 +338,56 @@ def get_decision(conn: sqlite3.Connection, decision_id: str) -> TradeDecision | 
         model=row[9],
         generated_at=datetime.fromisoformat(row[10]),
     )
+
+
+def record_outcome(conn: sqlite3.Connection, outcome_id: str, outcome: Outcome) -> bool:
+    """Persist a closed-trade Outcome. Idempotent by outcome_id: a
+    duplicate write is a no-op and does not overwrite the original."""
+    cursor = conn.execute(
+        """
+        INSERT OR IGNORE INTO outcomes
+            (outcome_id, venue, symbol, strategy_version, opened_at, closed_at, realized_pnl_pct, recorded_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            outcome_id,
+            outcome.venue,
+            outcome.symbol,
+            outcome.strategy_version,
+            outcome.opened_at.isoformat(),
+            outcome.closed_at.isoformat(),
+            outcome.realized_pnl_pct,
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+    conn.commit()
+    return cursor.rowcount > 0
+
+
+def list_outcomes(
+    conn: sqlite3.Connection, *, strategy_version: str | None = None, symbol: str | None = None
+) -> list[Outcome]:
+    query = "SELECT venue, symbol, strategy_version, opened_at, closed_at, realized_pnl_pct FROM outcomes"
+    clauses: list[str] = []
+    params: list[Any] = []
+    if strategy_version is not None:
+        clauses.append("strategy_version = ?")
+        params.append(strategy_version)
+    if symbol is not None:
+        clauses.append("symbol = ?")
+        params.append(symbol)
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+    query += " ORDER BY closed_at ASC, rowid ASC"
+    rows = conn.execute(query, params).fetchall()
+    return [
+        Outcome(
+            venue=row[0],
+            symbol=row[1],
+            strategy_version=row[2],
+            opened_at=datetime.fromisoformat(row[3]),
+            closed_at=datetime.fromisoformat(row[4]),
+            realized_pnl_pct=row[5],
+        )
+        for row in rows
+    ]

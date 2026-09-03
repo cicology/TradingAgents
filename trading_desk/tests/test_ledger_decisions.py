@@ -98,7 +98,7 @@ def test_existing_v1_database_upgrades_cleanly_to_v2(tmp_path, monkeypatch: pyte
 
     upgraded_conn = ledger.connect(path)
     try:
-        assert ledger.schema_version(upgraded_conn) == 2
+        assert ledger.schema_version(upgraded_conn) == len(ledger._MIGRATIONS)
         assert ledger.record_decision(upgraded_conn, "dec-1", decision()) is True
     finally:
         upgraded_conn.close()
