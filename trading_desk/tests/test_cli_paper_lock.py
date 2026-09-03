@@ -35,7 +35,9 @@ def test_analyze_mt5_live_flag_fails_closed(capsys: pytest.CaptureFixture[str]) 
 
 
 def test_binance_order_live_flag_fails_closed(capsys: pytest.CaptureFixture[str]) -> None:
-    code = cli.main(["binance", "order", "btc", "BUY", "0.001", "--live"])
+    code = cli.main(
+        ["binance", "order", "btc", "BUY", "--equity", "10000", "--entry", "50000", "--stop", "49000", "--live"]
+    )
 
     assert code != 0
     captured = capsys.readouterr()
@@ -47,6 +49,8 @@ def test_binance_order_live_flag_fails_closed_even_with_legacy_env_set(
 ) -> None:
     monkeypatch.setenv("DESK_ALLOW_LIVE_ORDERS", "1")
 
-    code = cli.main(["binance", "order", "btc", "BUY", "0.001", "--live"])
+    code = cli.main(
+        ["binance", "order", "btc", "BUY", "--equity", "10000", "--entry", "50000", "--stop", "49000", "--live"]
+    )
 
     assert code != 0

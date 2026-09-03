@@ -8,6 +8,7 @@ from trading_desk import config as _config  # noqa: F401 — load .env and SSL b
 from trading_desk.binance_bridge import klines as binance_klines
 from trading_desk.binance_bridge import paper_order
 from trading_desk.binance_bridge import ping as binance_ping
+from trading_desk.binance_bridge import quantity_from_risk
 from trading_desk.brue_runner import analyze_with_brue, list_scripts
 from trading_desk.instruments import UNIVERSE, resolve
 from trading_desk.kelly import size_position
@@ -45,6 +46,18 @@ def main(argv: list[str] | None = None) -> int:
     brue_run.add_argument("script", help="ema_crossover or rsi_extremes")
     brue_run.add_argument("instrument", help="Desk name, e.g. gold")
     brue_run.add_argument("--paper-order", action="store_true", help="Log a paper Binance order from the last signal")
+    brue_run.add_argument(
+        "--equity", type=float, help="Account equity in USD (required with --paper-order)"
+    )
+    brue_run.add_argument(
+        "--size-pct", type=float, default=0.5, help="Percent of equity to risk (shared max-position cap still applies)"
+    )
+    brue_run.add_argument(
+        "--stop-pct",
+        type=float,
+        default=2.0,
+        help="Protective stop distance as percent of last close (Brue signals carry no ATR/level stop)",
+    )
 
     mt5p = sub.add_parser("mt5", help="MetaTrader 5 account, quotes, and orders")
     mt5_sub = mt5p.add_subparsers(dest="mt5_cmd", required=True)
@@ -65,10 +78,17 @@ def main(argv: list[str] | None = None) -> int:
     bnc_klines.add_argument("instrument", help="Desk name or raw perp, e.g. gold or BTCUSDT")
     bnc_klines.add_argument("--interval", default="1d")
     bnc_klines.add_argument("--limit", type=int, default=5)
-    bnc_order = bnc_sub.add_parser("order", help="Paper (default) or live market order")
+    bnc_order = bnc_sub.add_parser(
+        "order", help="Paper (default) or live market order, quantity sized from risk (never a raw amount)"
+    )
     bnc_order.add_argument("instrument")
     bnc_order.add_argument("side", choices=("BUY", "SELL", "buy", "sell"))
-    bnc_order.add_argument("quantity", type=float)
+    bnc_order.add_argument("--equity", type=float, required=True, help="Account equity in USD")
+    bnc_order.add_argument("--entry", type=float, required=True, help="Entry price")
+    bnc_order.add_argument("--stop", type=float, required=True, help="Stop-loss price")
+    bnc_order.add_argument(
+        "--size-pct", type=float, default=0.5, help="Percent of equity to risk (shared max-position cap still applies)"
+    )
     bnc_order.add_argument("--live", action="store_true", help="Submit for real; requires DESK_ALLOW_LIVE_ORDERS=1")
 
     risk_cmd = sub.add_parser("risk", help="Shared risk state: open positions, daily PnL halt")
@@ -199,7 +219,21 @@ def _cmd_brue(args: argparse.Namespace) -> int:
         if not instrument.binance_perp:
             print("No Binance perp mapped for this instrument; skip order.", file=sys.stderr)
             return 0
-        order = paper_order(instrument.binance_perp, result["last_signal"], 0.001, live=False)
+        if not args.equity or args.equity <= 0:
+            print("--equity is required with --paper-order (no hardcoded quantity).", file=sys.stderr)
+            return 1
+        side = result["last_signal"]
+        entry = float(result["last_close"])
+        stop_fraction = max(0.0, args.stop_pct) / 100.0
+        stop = entry * (1 - stop_fraction) if side == "BUY" else entry * (1 + stop_fraction)
+        try:
+            quantity = quantity_from_risk(
+                equity=args.equity, size_pct=args.size_pct, entry=entry, stop=stop, side=side
+            )
+        except ValueError as exc:
+            print(f"Paper order rejected: {exc}", file=sys.stderr)
+            return 1
+        order = paper_order(instrument.binance_perp, side, quantity, live=False, size_pct=args.size_pct)
         print("paper order:", json.dumps(order, indent=2))
     return 0
 
@@ -223,7 +257,11 @@ def _cmd_binance(args: argparse.Namespace) -> int:
             print(json.dumps(binance_klines(symbol, args.interval, args.limit), indent=2, default=str))
             return 0
         symbol = _perp(args.instrument)
-        payload = paper_order(symbol, args.side, args.quantity, live=args.live)
+        side = args.side.upper()
+        quantity = quantity_from_risk(
+            equity=args.equity, size_pct=args.size_pct, entry=args.entry, stop=args.stop, side=side
+        )
+        payload = paper_order(symbol, side, quantity, live=args.live, size_pct=args.size_pct)
         print(json.dumps(payload, indent=2, default=str))
         return 0
     except Exception as exc:  # noqa: BLE001

@@ -145,11 +145,13 @@ python -m trading_desk analyze gold --dry-run
 python -m trading_desk analyze gold --brue ema_crossover --dry-run
 python -m trading_desk brue list
 python -m trading_desk brue run ema_crossover gold
-python -m trading_desk brue run rsi_extremes btc --paper-order
+python -m trading_desk brue run rsi_extremes btc --paper-order --equity 10000
 python -m trading_desk binance ping
 python -m trading_desk binance klines gold --limit 5
-python -m trading_desk binance order btc BUY 0.001
+python -m trading_desk binance order btc BUY --equity 10000 --entry 50000 --stop 49000
 ```
+
+`binance order` sizes quantity from `--equity`/`--entry`/`--stop`/`--size-pct` through the shared risk pipeline — there is no raw quantity argument, so a manual order cannot bypass the position-size cap.
 
 `--dry-run` fetches data and writes a rule-based stub (no API key). Use it to verify Yahoo access.
 
