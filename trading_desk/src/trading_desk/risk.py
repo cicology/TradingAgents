@@ -50,8 +50,13 @@ def _load_state() -> dict[str, Any]:
 
 
 def _save_state(state: dict[str, Any]) -> None:
+    """Write state via a same-directory temp file + atomic replace, so a
+    crash mid-write can never leave a truncated/corrupt risk_state.json for
+    the next run to load."""
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps(state, indent=2, default=str))
+    temporary = STATE_PATH.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
+    temporary.replace(STATE_PATH)
 
 
 def _today() -> str:
@@ -101,9 +106,17 @@ def check_order(venue: str, symbol: str, action: str, size_pct: float | None = N
     state = _load_state()
     key = _position_key(venue, symbol)
     existing = state.get("open_positions", {}).get(key)
-    if existing and existing.get("side") == action:
+    if existing:
+        # Any existing position blocks a new entry on this venue+symbol —
+        # not just a same-side duplicate. A same-key opposite-side order
+        # would otherwise overwrite the tracked position in record_open's
+        # dict assignment, silently losing the original position from risk
+        # state (the position it represents is still open at the broker).
         return RiskDecision(
-            False, f"Duplicate order blocked: already {action} on {venue}:{symbol} since {existing.get('opened_at')}", 0.0
+            False,
+            f"Position already open on {venue}:{symbol} "
+            f"({existing.get('side')} since {existing.get('opened_at')}); close it before opening another.",
+            0.0,
         )
 
     capped = size_pct
@@ -113,15 +126,20 @@ def check_order(venue: str, symbol: str, action: str, size_pct: float | None = N
     return RiskDecision(True, "approved", capped)
 
 
-def record_open(venue: str, symbol: str, action: str) -> None:
+def record_open(venue: str, symbol: str, action: str, size_pct: float | None = None) -> None:
     """Mark a position as open after an order actually goes through
-    (paper-logged counts — it should still block a duplicate paper entry)."""
+    (paper-logged counts — it should still block a duplicate paper entry).
+
+    @param size_pct: the approved position size, persisted so a restart can
+        reconcile risk state without re-deriving it.
+    """
     action = (action or "").upper()
     if action not in {"BUY", "SELL"}:
         return
     state = _load_state()
     state.setdefault("open_positions", {})[_position_key(venue, symbol)] = {
         "side": action,
+        "size_pct": size_pct,
         "opened_at": datetime.now(timezone.utc).isoformat(),
     }
     _save_state(state)

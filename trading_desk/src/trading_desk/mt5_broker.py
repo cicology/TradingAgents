@@ -339,7 +339,7 @@ def place_order(
             "check": _as_dict(check),
         }
         if not live:
-            record_open("mt5", symbol, action)
+            record_open("mt5", symbol, action, size_pct=size_pct)
             return paper
         # Unreachable in Phase 0: require_paper_mode() above already raised
         # PaperOnlyError for live=True before this function did anything.
@@ -354,7 +354,7 @@ def place_order(
         result = mt5.order_send(request)
         filled = bool(result and result.retcode == mt5.TRADE_RETCODE_DONE)
         if filled:
-            record_open("mt5", symbol, action)
+            record_open("mt5", symbol, action, size_pct=size_pct)
         payload = {
             **paper,
             "status": "submitted" if filled else "rejected",

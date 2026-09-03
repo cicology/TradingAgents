@@ -75,6 +75,14 @@ def main(argv: list[str] | None = None) -> int:
     risk_sub = risk_cmd.add_subparsers(dest="risk_cmd", required=True)
     risk_sub.add_parser("status", help="Show open positions and today's realized PnL vs the daily halt")
     risk_sub.add_parser("reset-daily", help="Clear today's realized PnL (does not touch open positions)")
+    risk_close = risk_sub.add_parser(
+        "close", help="Explicitly close a tracked position and record its realized PnL"
+    )
+    risk_close.add_argument("venue", help="e.g. mt5, binance")
+    risk_close.add_argument("symbol", help="Venue-native symbol, e.g. XAUUSD, BTCUSDT")
+    risk_close.add_argument(
+        "--realized-pnl-pct", type=float, required=True, help="Realized PnL as a percent of capital"
+    )
 
     kelly_cmd = sub.add_parser("kelly", help="Compute Kelly / half-Kelly / capped size")
     kelly_cmd.add_argument("--win-rate", type=float, default=0.55, help="True-ish win probability 0-1")
@@ -103,11 +111,28 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_risk(args: argparse.Namespace) -> int:
-    from trading_desk.risk import MAX_DAILY_LOSS_PCT, MAX_POSITION_PCT, daily_loss_breached, open_positions, reset_daily
+    from trading_desk.risk import (
+        MAX_DAILY_LOSS_PCT,
+        MAX_POSITION_PCT,
+        daily_loss_breached,
+        open_positions,
+        record_close,
+        reset_daily,
+    )
 
     if args.risk_cmd == "reset-daily":
         reset_daily()
         print("Daily realized PnL reset to 0.0%. Open positions untouched.")
+        return 0
+
+    if args.risk_cmd == "close":
+        before = open_positions()
+        key = f"{args.venue}:{args.symbol}".upper()
+        if key not in before:
+            print(f"No tracked open position for {key}.", file=sys.stderr)
+            return 1
+        record_close(args.venue, args.symbol, realized_pnl_pct=args.realized_pnl_pct)
+        print(f"Closed {key}. Recorded realized PnL: {args.realized_pnl_pct:+.2f}%")
         return 0
 
     breached, pnl_pct = daily_loss_breached()
