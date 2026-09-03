@@ -1,6 +1,6 @@
 # Oryares Delivery Tracker
 
-Last updated: 2026-09-02
+Last updated: 2026-09-03
 
 Repository acceptance criteria are canonical. Notion mirrors this tracker for daily workflow. Status values are `Backlog`, `Ready`, `In Progress`, `Review`, `Verified`, and `Blocked`. An item becomes `Verified` only when its evidence is linked.
 
@@ -11,6 +11,21 @@ Repository acceptance criteria are canonical. Notion mirrors this tracker for da
 **Phase 0 — Lock and baseline**
 
 Phase 0 is complete when the offline test suite passes and no public CLI path can submit a live order.
+
+The [productization readiness assessment](productization/PRODUCTIZATION_READINESS_2026-09-03.md) currently rates the invite-only paper beta at **18% ready**. Public paid research is **10% ready** and customer-facing live automation is **5% ready**. These scores are planning estimates, not test coverage.
+
+## Productization Gate Overlay
+
+| Epic | Exit evidence | Status | Release blocker |
+|---|---|---|---|
+| E0 Safety isolation | Live paths unreachable; risk invariants green | Ready | Yes |
+| E1 Data and ledger | Reproducible run and complete trade lifecycle | Backlog | Yes |
+| E2 Evaluation | Leakage-safe backtest and walk-forward report | Backlog | Yes |
+| E3 Paper broker | Deterministic fills, restart, and reconciliation tests | Backlog | Yes |
+| E4 Product surface | Auth, tenant isolation, audit/export/delete E2E | Backlog | Yes |
+| E5 Operations | CI/CD, observability, restore, rollback, incident drill | Backlog | Yes |
+| E6 Commercial/compliance | Counsel sign-off and payment-provider approval | Backlog | Yes |
+| E7 Demo/live | Broker certification, demo evidence, kill-switch drill | Backlog | Live only |
 
 ## Work Items
 
@@ -60,3 +75,5 @@ Phase 0 is complete when the offline test suite passes and no public CLI path ca
 | 2026-09-02 | Intraday and swing are independent programs | Prevents one horizon from masking another’s results |
 | 2026-09-02 | Evidence-first promotion gate | Requires ≥100 closed trades, ≥90 days, cost-adjusted edge, controlled drawdown, and no critical safety violations |
 | 2026-09-02 | Repository is canonical; Notion mirrors delivery state | Keeps acceptance criteria version-controlled while supporting daily planning |
+| 2026-09-03 | First external product is Oryares Lab, invite-only and paper-only | Competing on auditability and promotion discipline is more defensible than generic AI automation |
+| 2026-09-03 | RAG, GSAP, and payments are not Phase 0 dependencies | Retrieval lacks a justified corpus, animation lacks a frontend, and payment integration requires perimeter and provider approval |
