@@ -20,17 +20,51 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from trading_desk import ledger
 from trading_desk.config import REPORTS_DIR
+from trading_desk.domain import LifecycleEvent, LifecycleEventType
 
 STATE_PATH: Path = REPORTS_DIR / "risk_state.json"
+LEDGER_DB_PATH: Path = ledger.DEFAULT_DB_PATH
 
 MAX_POSITION_PCT = float(os.getenv("MAX_POSITION_PCT", "5") or 5)
 MAX_DAILY_LOSS_PCT = float(os.getenv("MAX_DAILY_LOSS_PCT", "2") or 2)
+
+
+def _record_lifecycle_event(event_type: LifecycleEventType, venue: str, symbol: str, payload: dict[str, Any]) -> None:
+    """Best-effort write into the immutable ledger (TA-105). This is an
+    audit/provenance side-channel, not the safety-critical state itself —
+    a disk/permission failure here must never block or corrupt the
+    JSON risk-state gate that check_order()/record_open()/record_close()
+    enforce. event_id is a fresh UUID per call: true retry-idempotency
+    (deduplicating a genuinely repeated submission) needs a caller-
+    supplied order/decision id, which arrives with the paper order/fill
+    simulator (TA-203) — this only guarantees every real lifecycle
+    transition is captured, not deduplicated across process retries."""
+    try:
+        conn = ledger.connect(LEDGER_DB_PATH)
+    except Exception:
+        return
+    try:
+        event = LifecycleEvent(
+            event_id=str(uuid.uuid4()),
+            venue=venue,
+            symbol=symbol,
+            event_type=event_type,
+            occurred_at=datetime.now(timezone.utc),
+            payload=payload,
+        )
+        ledger.record_lifecycle_event(conn, event)
+    except Exception:
+        pass
+    finally:
+        conn.close()
 
 
 @dataclass(frozen=True)
@@ -143,6 +177,7 @@ def record_open(venue: str, symbol: str, action: str, size_pct: float | None = N
         "opened_at": datetime.now(timezone.utc).isoformat(),
     }
     _save_state(state)
+    _record_lifecycle_event(LifecycleEventType.OPEN, venue, symbol, {"side": action, "size_pct": size_pct})
 
 
 def record_close(venue: str, symbol: str, realized_pnl_pct: float = 0.0) -> None:
@@ -156,6 +191,7 @@ def record_close(venue: str, symbol: str, realized_pnl_pct: float = 0.0) -> None
         day["realized_pnl_pct"] = 0.0
     day["realized_pnl_pct"] = float(day.get("realized_pnl_pct", 0.0)) + realized_pnl_pct
     _save_state(state)
+    _record_lifecycle_event(LifecycleEventType.CLOSE, venue, symbol, {"realized_pnl_pct": realized_pnl_pct})
 
 
 def open_positions() -> dict[str, Any]:

@@ -166,11 +166,16 @@ def rejected_decision() -> dict[str, Any]:
 
 @pytest.fixture
 def isolated_risk_state(tmp_path, monkeypatch: pytest.MonkeyPatch):
-    """Point trading_desk.risk at a throwaway state file for this test only."""
+    """Point trading_desk.risk at a throwaway state file *and* a throwaway
+    ledger DB for this test only — record_open()/record_close() write to
+    both (TA-105), and neither should ever touch the developer's real
+    trading_desk/reports/ files during a test run."""
     from trading_desk import risk
 
     state_path = tmp_path / "risk_state.json"
+    ledger_path = tmp_path / "ledger.sqlite3"
     monkeypatch.setattr(risk, "STATE_PATH", state_path)
+    monkeypatch.setattr(risk, "LEDGER_DB_PATH", ledger_path)
     return risk
 
 
