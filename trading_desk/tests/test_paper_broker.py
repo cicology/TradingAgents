@@ -85,6 +85,19 @@ def test_commission_and_costs_are_recorded_in_the_execution_reason() -> None:
     assert "commission_per_unit=0.02" in execution.reason
 
 
+def test_execution_timestamp_is_the_fill_bar_time_not_wall_clock() -> None:
+    """This is a deterministic bar-replay system: a fill's timestamp must
+    come from the bar it filled on, not datetime.now() — otherwise
+    replaying historical bars produces an Outcome whose opened_at is
+    'whenever the simulation ran' rather than the bar's actual time,
+    which can even fail Outcome's own closed_at >= opened_at check when
+    replaying old data."""
+    intent = build_order_intent(approved_buy(), venue="mt5", symbol="XAUUSD", equity=10_000.0, decision_id="dec-1")
+    fill_bar = bar()
+    execution = simulate_fill(intent, fill_bar, spread=0.30, slippage=0.10, commission_per_unit=0.02)
+    assert execution.executed_at == fill_bar.time
+
+
 def test_fill_is_deterministic_across_repeated_calls() -> None:
     intent = build_order_intent(approved_buy(), venue="mt5", symbol="XAUUSD", equity=10_000.0, decision_id="dec-1")
     first = simulate_fill(intent, bar(), spread=0.30, slippage=0.10, commission_per_unit=0.02)

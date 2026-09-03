@@ -10,8 +10,6 @@ required parameters, and the resulting fill price always reflects them.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from trading_desk.domain import Action, ExecutionStatus, OrderIntent, PaperExecution, TradeDecision, ValidationError
 from trading_desk.market_data import Bar
 
@@ -56,7 +54,12 @@ def simulate_fill(
     the spread plus slippage — both BUY and SELL pay these costs, never
     receive them. commission_per_unit is recorded for transparency (it
     reduces eventual realized PnL, computed at outcome time in TA-204/205)
-    rather than folded into the fill price itself."""
+    rather than folded into the fill price itself.
+
+    executed_at is the fill bar's own time, not wall-clock now — this is
+    a deterministic bar-replay system (see evidence.py), and a fill's
+    timestamp must be reproducible from the same bars, not depend on when
+    the simulation happened to run."""
     half_spread = spread / 2.0
     if order_intent.action is Action.BUY:
         fill_price = fill_bar.open + half_spread + slippage
@@ -69,5 +72,5 @@ def simulate_fill(
         status=ExecutionStatus.PAPER,
         fill_price=fill_price,
         reason=reason,
-        executed_at=datetime.now(timezone.utc),
+        executed_at=fill_bar.time,
     )
