@@ -31,7 +31,7 @@ The [productization readiness assessment](productization/PRODUCTIZATION_READINES
 
 | ID | Phase | Work item | Status | Priority | Scope | Safety-critical | Depends on | Acceptance evidence |
 |---|---:|---|---|---|---|---|---|---|
-| TA-001 | 0 | Add pytest foundation and characterization fixtures | Ready | P0 | Platform | Yes | — | Test command and captured adapter fixtures pass offline |
+| TA-001 | 0 | Add pytest foundation and characterization fixtures | Verified | P0 | Platform | Yes | — | `PYTHONPATH=trading_desk/src python -m pytest trading_desk/tests -q` — 2 passed, 2026-09-03, commit `<pending>`. Root CI (`.github/workflows/ci.yml`) runs compile + pytest + universe smoke on push/PR. |
 | TA-002 | 0 | Enforce paper-only mode at application boundary | Ready | P0 | Platform | Yes | TA-001 | Tests prove CLI and adapters cannot submit live orders |
 | TA-003 | 0 | Honor decision and risk maximum-size caps | Backlog | P0 | Platform | Yes | TA-001 | Normalization tests prove the tightest cap always wins |
 | TA-004 | 0 | Correct MT5 stop-price and stop-distance translation | Backlog | P0 | XAU/FX | Yes | TA-001 | Buy/sell price-stop and ATR-distance tests pass |

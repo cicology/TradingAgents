@@ -15,8 +15,17 @@ dependencies = [
     "MetaTrader5>=5.0.45; platform_system == 'Windows'",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.3,<9",
+]
+
 [project.scripts]
 desk = "trading_desk.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]

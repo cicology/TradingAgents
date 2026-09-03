@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  desk-safety-suite:
+    name: trading_desk offline safety suite
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trading_desk
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install desk with test dependencies
+        run: python -m pip install -e ".[test]"
+
+      - name: Compile check
+        run: python -m compileall -q src
+
+      - name: Offline regression suite
+        run: python -m pytest tests -q
+
+      - name: Universe smoke check
+        run: python -m trading_desk universe
