@@ -65,6 +65,19 @@ def run_analysis(instrument: Instrument, mode: str = "quick", dry_run: bool = Fa
     return result
 
 
+def _pct(value: Any, default: float | None) -> float | None:
+    """Parse a percent field defensively. Missing, non-numeric, or negative
+    input never falls back to a permissive default — callers that need "no
+    limit declared" to mean "no size allowed" must pass default=0.0."""
+    try:
+        if value is None:
+            return default
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0.0, parsed)
+
+
 def _normalize_decision(block: dict[str, Any]) -> dict[str, Any]:
     action = str(block.get("action") or "HOLD").upper()
     if action not in {"BUY", "SELL", "HOLD"}:
@@ -76,14 +89,25 @@ def _normalize_decision(block: dict[str, Any]) -> dict[str, Any]:
     max_size = 0.0
     kelly = None
     if verdict not in {"REJECT"} and action in {"BUY", "SELL"}:
-        frac = KELLY_FRACTION if verdict == "APPROVE" else max(0.25, KELLY_FRACTION / 2.0)
-        kelly = size_for_trade(block, fraction_of_full=frac, cap=KELLY_CAP)
-        max_size = round(kelly.cap * 100.0, 4)
-        size = round(kelly.capped * 100.0, 4)
-        if not kelly.edge:
+        # The risk agent's declared cap and the desk's own Kelly hard cap
+        # are two independent ceilings; the tighter of the two always wins.
+        # A missing/unparseable/negative declared cap means "no limit was
+        # validly declared", which is treated as zero, not "unlimited".
+        declared_cap_pct = _pct(block.get("max_size_pct"), default=0.0) or 0.0
+        effective_cap = min(KELLY_CAP, declared_cap_pct / 100.0)
+        if effective_cap <= 0:
             size = 0.0
             max_size = 0.0
             verdict = "REJECT"
+        else:
+            frac = KELLY_FRACTION if verdict == "APPROVE" else max(0.25, KELLY_FRACTION / 2.0)
+            kelly = size_for_trade(block, fraction_of_full=frac, cap=effective_cap)
+            max_size = round(kelly.cap * 100.0, 4)
+            size = round(kelly.capped * 100.0, 4)
+            if not kelly.edge:
+                size = 0.0
+                max_size = 0.0
+                verdict = "REJECT"
     payload = {
         "action": action,
         "confidence": block.get("confidence"),
