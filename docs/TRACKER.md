@@ -32,7 +32,7 @@ The [productization readiness assessment](productization/PRODUCTIZATION_READINES
 | ID | Phase | Work item | Status | Priority | Scope | Safety-critical | Depends on | Acceptance evidence |
 |---|---:|---|---|---|---|---|---|---|
 | TA-001 | 0 | Add pytest foundation and characterization fixtures | Verified | P0 | Platform | Yes | — | `PYTHONPATH=trading_desk/src python -m pytest trading_desk/tests -q` — 2 passed, 2026-09-03, commit `<pending>`. Root CI (`.github/workflows/ci.yml`) runs compile + pytest + universe smoke on push/PR. |
-| TA-002 | 0 | Enforce paper-only mode at application boundary | Ready | P0 | Platform | Yes | TA-001 | Tests prove CLI and adapters cannot submit live orders |
+| TA-002 | 0 | Enforce paper-only mode at application boundary | Verified | P0 | Platform | Yes | TA-001 | `operating_mode.require_paper_mode()` is the single authoritative gate, called first in `mt5_broker.place_order` and `binance_bridge.paper_order`, and independently hard-disabled in `integrations/binance-bridge/cli.mjs`; ignores `DESK_ALLOW_LIVE_ORDERS`. 16 tests pass (`--live`, `--mt5-live`, and env-var bypass attempts all fail closed before any adapter side effect). Commit `<pending>`. |
 | TA-003 | 0 | Honor decision and risk maximum-size caps | Backlog | P0 | Platform | Yes | TA-001 | Normalization tests prove the tightest cap always wins |
 | TA-004 | 0 | Correct MT5 stop-price and stop-distance translation | Backlog | P0 | XAU/FX | Yes | TA-001 | Buy/sell price-stop and ATR-distance tests pass |
 | TA-005 | 0 | Reject unsafe MT5 minimum-volume rounding | Backlog | P0 | XAU/FX | Yes | TA-004 | Minimum lot above budget is rejected with evidence |

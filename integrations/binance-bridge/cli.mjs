@@ -99,21 +99,15 @@ async function main() {
       quantity,
       paper: !live,
     };
-    if (!live) {
-      ok({ ...intended, status: "paper-logged" });
-      return;
+    if (live) {
+      // Phase 0 is paper-only. This is a second, independent boundary: even
+      // a caller invoking this bridge directly (bypassing the Python CLI's
+      // own require_paper_mode() guard) cannot reach submitNewOrder here.
+      // DESK_ALLOW_LIVE_ORDERS is intentionally not consulted — no
+      // environment variable can re-enable this path during Phase 0.
+      fail("Phase 0 is paper-only. The Binance bridge cannot submit live orders.");
     }
-    if (String(process.env.DESK_ALLOW_LIVE_ORDERS || "") !== "1") {
-      fail("Refusing live order: set DESK_ALLOW_LIVE_ORDERS=1 (and prefer BINANCE_TESTNET=true).");
-    }
-    const usdm = client(true);
-    const result = await usdm.submitNewOrder({
-      symbol,
-      side,
-      type: "MARKET",
-      quantity,
-    });
-    ok({ ...intended, status: "submitted", result });
+    ok({ ...intended, status: "paper-logged" });
     return;
   }
   fail(`Unknown command '${cmd}'`);

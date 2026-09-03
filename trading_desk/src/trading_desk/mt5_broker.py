@@ -215,6 +215,10 @@ def place_order(
     *,
     live: bool = False,
 ) -> dict[str, Any]:
+    from trading_desk.operating_mode import require_paper_mode
+
+    require_paper_mode(live_requested=live)
+
     action = str(decision.get("action") or "HOLD").upper()
     verdict = str(decision.get("verdict") or "REJECT").upper()
     size_pct = float(decision.get("size_pct") or 0)
@@ -305,6 +309,10 @@ def place_order(
         if not live:
             record_open("mt5", symbol, action)
             return paper
+        # Unreachable in Phase 0: require_paper_mode() above already raised
+        # PaperOnlyError for live=True before this function did anything.
+        # Left in place for the future promotion decision that replaces the
+        # guard; live_orders_allowed() remains a second, independent check.
         if not live_orders_allowed():
             paper["status"] = "blocked"
             paper["reason"] = "Set DESK_ALLOW_LIVE_ORDERS=1 to send live MT5 orders"

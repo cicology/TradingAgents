@@ -56,7 +56,10 @@ def klines(symbol: str, interval: str = "1d", limit: int = 30) -> dict[str, Any]
 
 
 def paper_order(symbol: str, side: str, quantity: float, live: bool = False) -> dict[str, Any]:
+    from trading_desk.operating_mode import require_paper_mode
     from trading_desk.risk import check_order, record_open
+
+    require_paper_mode(live_requested=live)
 
     gate = check_order("binance", symbol, side)
     if not gate.approved:
