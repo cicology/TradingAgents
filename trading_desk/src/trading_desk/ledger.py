@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from trading_desk.config import REPORTS_DIR
-from trading_desk.domain import LifecycleEvent, LifecycleEventType
+from trading_desk.domain import Action, LifecycleEvent, LifecycleEventType, TradeDecision, Verdict
 
 DEFAULT_DB_PATH = REPORTS_DIR / "ledger.sqlite3"
 
@@ -77,6 +77,41 @@ _MIGRATIONS: list[tuple[int, str]] = [
         BEFORE DELETE ON safety_events
         BEGIN
             SELECT RAISE(ABORT, 'safety_events is append-only: DELETE is not permitted');
+        END;
+        """,
+    ),
+    (
+        2,
+        """
+        CREATE TABLE IF NOT EXISTS decisions (
+            decision_id       TEXT PRIMARY KEY,
+            instrument        TEXT NOT NULL,
+            strategy_version  TEXT NOT NULL,
+            action            TEXT NOT NULL,
+            verdict           TEXT NOT NULL,
+            size_pct          REAL NOT NULL,
+            entry             REAL,
+            stop              REAL,
+            targets           TEXT NOT NULL,
+            rationale         TEXT NOT NULL,
+            model             TEXT,
+            generated_at      TEXT NOT NULL,
+            recorded_at       TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_decisions_instrument_strategy
+            ON decisions(instrument, strategy_version, generated_at);
+
+        CREATE TRIGGER IF NOT EXISTS trg_decisions_no_update
+        BEFORE UPDATE ON decisions
+        BEGIN
+            SELECT RAISE(ABORT, 'decisions is append-only: UPDATE is not permitted');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_decisions_no_delete
+        BEFORE DELETE ON decisions
+        BEGIN
+            SELECT RAISE(ABORT, 'decisions is append-only: DELETE is not permitted');
         END;
         """,
     ),
@@ -215,3 +250,61 @@ def list_safety_events(conn: sqlite3.Connection, *, category: str | None = None)
         {"event_id": row[0], "category": row[1], "occurred_at": row[2], "payload": json.loads(row[3])}
         for row in rows
     ]
+
+
+def record_decision(conn: sqlite3.Connection, decision_id: str, decision: TradeDecision) -> bool:
+    """Persist a canonical TradeDecision — the E1 exit criterion 'every
+    decision is durable and traceable' means the decision itself, not just
+    the lifecycle events that may follow it. Idempotent by decision_id:
+    a duplicate write is a no-op and does not overwrite the original."""
+    cursor = conn.execute(
+        """
+        INSERT OR IGNORE INTO decisions
+            (decision_id, instrument, strategy_version, action, verdict, size_pct,
+             entry, stop, targets, rationale, model, generated_at, recorded_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            decision_id,
+            decision.instrument,
+            decision.strategy_version,
+            decision.action.value,
+            decision.verdict.value,
+            decision.size_pct,
+            decision.entry,
+            decision.stop,
+            json.dumps(list(decision.targets)),
+            decision.rationale,
+            decision.model,
+            decision.generated_at.isoformat(),
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+    conn.commit()
+    return cursor.rowcount > 0
+
+
+def get_decision(conn: sqlite3.Connection, decision_id: str) -> TradeDecision | None:
+    row = conn.execute(
+        """
+        SELECT instrument, strategy_version, action, verdict, size_pct,
+               entry, stop, targets, rationale, model, generated_at
+        FROM decisions WHERE decision_id = ?
+        """,
+        (decision_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return TradeDecision(
+        instrument=row[0],
+        strategy_version=row[1],
+        action=Action(row[2]),
+        verdict=Verdict(row[3]),
+        size_pct=row[4],
+        entry=row[5],
+        stop=row[6],
+        targets=tuple(json.loads(row[7])),
+        rationale=row[8],
+        model=row[9],
+        generated_at=datetime.fromisoformat(row[10]),
+    )
