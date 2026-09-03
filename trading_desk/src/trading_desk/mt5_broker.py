@@ -6,6 +6,7 @@ This cannot guarantee profit. It only routes sized orders to your broker.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -140,12 +141,21 @@ def _filling_mode(mt5: Any, info: Any) -> int:
     return ret
 
 
-def _normalize_volume(info: Any, volume: float) -> float:
+def _normalize_volume(info: Any, volume: float) -> float | None:
+    """Round a computed lot size down to a broker-tradeable volume without
+    ever increasing the risk that sizing computed. Rounding to the nearest
+    step (or clamping up to volume_min) can push the actual position above
+    what was approved; rounding down and rejecting below-minimum sizes is
+    the only direction that cannot increase risk."""
     step = float(info.volume_step or 0.01)
     vmin = float(info.volume_min or step)
     vmax = float(info.volume_max or volume)
-    steps = round(volume / step)
-    sized = max(vmin, min(vmax, steps * step))
+    if volume <= 0:
+        return None
+    steps = math.floor((min(volume, vmax) + 1e-12) / step)
+    sized = steps * step
+    if sized < vmin - 1e-9:
+        return None
     digits = 0 if step >= 1 else len(str(step).rstrip("0").split(".")[-1])
     return float(f"{sized:.{digits}f}")
 
@@ -171,25 +181,32 @@ def lots_from_risk(info: Any, tick: Any, equity: float, size_pct: float, stop_di
     return float(info.volume_min or 0.01)
 
 
-def _stop_distance(decision: dict[str, Any], tick: Any, info: Any) -> float | None:
-    stop = decision.get("stop")
-    entry = decision.get("entry")
-    atr = None
+def _stop_distance(decision: dict[str, Any], action: str, tick: Any, info: Any) -> float | None:
+    """Translate a decision's `stop` field into a broker stop distance.
+
+    `stop` may be either a price (typical LLM/trader output) or an
+    ATR-style distance already expressed in price units. Direction matters:
+    a BUY's protective stop must sit below the current ask, a SELL's must
+    sit above the current bid. A stop on the wrong side of price is not a
+    valid protective stop and is rejected rather than guessed at — an
+    order without a stop it can express must not reach the broker.
+    """
     try:
-        stop_f = float(stop)
-    except (TypeError, ValueError):
+        stop = float(decision["stop"])
+    except (KeyError, TypeError, ValueError):
         return None
-    try:
-        entry_f = float(entry) if entry is not None else None
-    except (TypeError, ValueError):
-        entry_f = None
-    price = float(tick.ask or tick.bid or 0)
-    if entry_f and abs(entry_f - stop_f) / max(price, 1) > 0.0001 and stop_f < price * 0.5:
-        # stop looks like a price
-        return abs(price - stop_f)
-    if 0 < stop_f < price * 0.2:
-        return stop_f  # ATR-style distance
-    return None
+    price = float(tick.ask if action == "BUY" else tick.bid) or 0.0
+    if not price or stop <= 0:
+        return None
+    if stop < price * 0.2:
+        # ATR-style distance, not a price.
+        return stop
+    valid_price_stop = (action == "BUY" and stop < price) or (action == "SELL" and stop > price)
+    if not valid_price_stop:
+        return None
+    distance = abs(price - stop)
+    minimum = float(getattr(info, "point", 0.0) or 0.0)
+    return distance if distance >= minimum else None
 
 
 def _daily_loss_breached(mt5: Any, equity: float) -> tuple[bool, float]:
@@ -258,11 +275,26 @@ def place_order(
                 "day_pnl": day_pnl,
                 "mt5_symbol": symbol,
             }
-        stop_dist = _stop_distance(decision, tick, info)
+        stop_dist = _stop_distance(decision, action, tick, info)
+        if not stop_dist:
+            # Never route an order that cannot express a protective stop;
+            # falling back to notional sizing with sl=0 is exactly the
+            # "stop loss silently omitted" defect this closes.
+            return {
+                "status": "skipped",
+                "reason": "no valid protective stop could be translated for this decision",
+                "mt5_symbol": symbol,
+                "action": action,
+            }
         volume = lots_from_risk(info, tick, float(account.equity), size_pct, stop_dist)
         volume = _normalize_volume(info, volume)
-        if volume < float(info.volume_min or 0):
-            return {"status": "skipped", "reason": "volume below broker minimum", "volume": volume}
+        if volume is None:
+            return {
+                "status": "skipped",
+                "reason": "broker minimum lot exceeds approved risk budget",
+                "mt5_symbol": symbol,
+                "action": action,
+            }
 
         order_type = mt5.ORDER_TYPE_BUY if action == "BUY" else mt5.ORDER_TYPE_SELL
         price = tick.ask if action == "BUY" else tick.bid
