@@ -99,13 +99,16 @@ def _numeric_gate(
         raise ValueError(f"unsupported comparison: {comparison}")
 
     verdict = "meets" if passed else "does not meet"
+    # Round for readability in the rendered report, but only for display —
+    # the pass/fail decision above used the exact value.
+    shown = f"{value:.4g}{unit}" if isinstance(value, float) else f"{value}{unit}"
     return GateResult(
         name=name,
         passed=passed,
         source_metric=source_metric,
         threshold=threshold_text,
-        observed=f"{value}{unit}",
-        reason=f"{source_metric} of {value}{unit} {verdict} the required {threshold_text}",
+        observed=shown,
+        reason=f"{source_metric} of {shown} {verdict} the required {threshold_text}",
     )
 
 
@@ -217,7 +220,7 @@ def render_promotion_markdown(report: PromotionReport) -> str:
     lines = [
         "# Promotion gate report",
         "",
-        f"**State:** `{report.state.value}` — {'all gates passed' if report.all_passed else 'blocked'}",
+        f"**State:** `{report.state.value}` - {'all gates passed' if report.all_passed else 'blocked'}",
         "",
         "| Gate | Verdict | Source metric | Threshold | Observed | Reason |",
         "|---|---|---|---|---|---|",
