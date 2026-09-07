@@ -16,6 +16,10 @@ Phase 0 is complete when the offline test suite passes and no public CLI path ca
 
 **Phase 2 — XAU/USD vertical slice: complete 2026-09-03 (TA-201–TA-206).** `market_data.py` ingests closed 15m/1h MT5 bars (never the forming bar); `evidence.py` hashes them deterministically; `strategy.py` runs a versioned, LLM-free EMA-crossover strategy; `paper_broker.py` sizes and fills with explicit spread/slippage/commission; `lifecycle.py` replays stop/target/expiry conservatively (worst-case intrabar resolution); `outcome_report.py` exports operator-readable, ledger-matching totals. `run_slice.py::run_slice()` (TA-206, added mid-phase once TA-201–205 existed as separate pieces but nothing tied them together) runs the complete loop in one reproducible, idempotent call and is what closes E1's "reproducible run" gap. **Scope note:** the legacy CLI (`cli.py`, `pipeline.py`) still runs the Phase-0-hardened Kelly-based path for its own analysis flow — `run_slice()` is a new, separate entry point, not yet wired into `desk` CLI subcommands or a live MT5 data feed (bars are caller-supplied `Bar` lists in every test). CLI wiring and a scheduled run are Phase 5 (TA-501) territory, not required for this gate.
 
+**Phase 3 — Evaluation and promotion: E2 framework verified 2026-09-07 (TA-301–TA-305).** `metrics.py` (returns, drawdown, tail risk, streaks — never a single headline number), `baseline.py` (versioned buy-and-hold paying the same costs), `walk_forward.py` (chronological splits, rolling folds, a `LeakageError` detector proven to fire on data that genuinely leaks), `promotion.py` (seven auditable gates, each naming its metric/threshold/reason), and `evaluation.py` (the runner that produces the report and saves reproducible artifacts).
+
+**Two things this explicitly does NOT mean.** (1) *No candidate has passed these gates.* The framework is built and tested; the only strategy that exists is a deliberately simple EMA crossover that has never been run against real market history, and on synthetic data it is correctly blocked at `research` for insufficient trades and evidence days. (2) *Overfitting has not been ruled out.* The current strategy has no fitted parameters, so walk-forward demonstrates stability across time only; a strategy with tunable parameters will require a fitting hook that provably cannot see the test window before these reports can speak to overfitting at all. Nothing in this phase is evidence of an edge — it is the apparatus for eventually producing such evidence.
+
 The [productization readiness assessment](productization/PRODUCTIZATION_READINESS_2026-09-03.md) currently rates the invite-only paper beta at **18% ready**. Public paid research is **10% ready** and customer-facing live automation is **5% ready**. These scores are planning estimates, not test coverage.
 
 ## Productization Gate Overlay
@@ -24,7 +28,7 @@ The [productization readiness assessment](productization/PRODUCTIZATION_READINES
 |---|---|---|---|
 | E0 Safety isolation | Live paths unreachable; risk invariants green | Verified | Yes |
 | E1 Data and ledger | Reproducible run and complete trade lifecycle | Verified | Yes |
-| E2 Evaluation | Leakage-safe backtest and walk-forward report | Backlog | Yes |
+| E2 Evaluation | Leakage-safe backtest and walk-forward report | Verified (framework); no candidate has passed its gates | Yes |
 | E3 Paper broker | Deterministic fills, restart, and reconciliation tests | In Progress (XAU only; BTC/FX pending Phase 4) | Yes |
 | E4 Product surface | Auth, tenant isolation, audit/export/delete E2E | Backlog | Yes |
 | E5 Operations | CI/CD, observability, restore, rollback, incident drill | Backlog | Yes |
